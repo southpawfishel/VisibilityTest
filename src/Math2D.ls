@@ -51,6 +51,18 @@ package Math2D
             updateDirection();
         }
 
+        public function rotateBy(thetaRadians:Number):void
+        {
+            var sinTheta = Math.sin(thetaRadians);
+            var cosTheta = Math.cos(thetaRadians);
+            var newDx = (dx * cosTheta) - (dy * sinTheta);
+            var newDy = (dx * sinTheta) + (dy * cosTheta);
+            dx = newDx;
+            dy = newDy;
+            x2 = x1 + dx;
+            y2 = y1 + dy;
+        }
+
         public function toString():String
         {
             return "Segment [" + x1 + ", " + y1 + "] to [" + x2 + ", " + y2 + "]";
@@ -81,12 +93,14 @@ package Math2D
     {
         public var hit:Boolean = false;
         public var hitIndex:int = 0;
+        public var t:Number = -1;
         public var intersection:Point = Point.ZERO;
 
         public static operator function =(r1:RaycastResult, r2:RaycastResult):RaycastResult
         {
             r1.hit = r2.hit;
             r1.hitIndex = r2.hitIndex;
+            r1.t = r2.t;
             r1.intersection = r2.intersection;
             return r1;
         }
@@ -100,6 +114,16 @@ package Math2D
         public static function dotProduct(p1:Point, p2:Point):Number
         {
             return (p1.x * p2.x) + (p1.y * p2.y);
+        }
+
+        public static function rotateVector(p:Point, thetaRadians:Number):void
+        {
+            var sinTheta = Math.sin(thetaRadians);
+            var cosTheta = Math.cos(thetaRadians);
+            var rotX = (p.x * cosTheta) - (p.y * sinTheta);
+            var rotY = (p.x * sinTheta) + (p.y * cosTheta);
+            p.x = rotX;
+            p.y = rotY;
         }
 
         // Return: A value of t to plug into the formula:
@@ -147,6 +171,7 @@ package Math2D
                 {
                     tempRaycastResult.hit = true;
                     tempRaycastResult.hitIndex = currentSeg;
+                    tempRaycastResult.t = tempT;
                     bestT = tempT;
                 }
                 ++currentSeg;

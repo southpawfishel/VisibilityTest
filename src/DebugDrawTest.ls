@@ -91,21 +91,31 @@ package
             var result:RaycastResult = new RaycastResult();
             var i = 0;
             var tempLine:LineSprite = null;
+            var angles:Vector.<Number> = [0, 0.00001, -0.00002];
 
             for each (var endpoint in worldEndpoints)
             {
-                tempLine = lineSprites[i];
                 ray.setP2(endpoint.x, endpoint.y);
-                result = Math2D.raycastToSegments(ray, worldSegments);
-                if (result.hit)
+
+                // For each endpoint, we cast a ray at it, and also one 0.00001
+                // radians rotated either way in case the endpoint is at the edge
+                // of a polygon, and we want to cast past it to hit whats beyond it.
+                // To rotate -0.00001, we'll use -0.00002 to undo the previous rotation.
+                for each (var angle:Number in angles)
                 {
-                    tempLine.setPoints(ray.x1, ray.y1, result.intersection.x, result.intersection.y);
+                    tempLine = lineSprites[i];
+                    ray.rotateBy(angle);
+                    result = Math2D.raycastToSegments(ray, worldSegments);
+                    if (result.hit)
+                    {
+                        tempLine.setPoints(ray.x1, ray.y1, result.intersection.x, result.intersection.y);
+                    }
+                    else
+                    {
+                        tempLine.setPoints(0, 0, 0, 0);
+                    }
+                    ++i;
                 }
-                else
-                {
-                    tempLine.setPoints(0, 0, 0, 0);
-                }
-                ++i;
             }
         }
 
@@ -170,9 +180,12 @@ package
                 for each (var endpoint:Point in poly.endpoints)
                 {
                     worldEndpoints.pushSingle(endpoint);
-                    tempLine = new LineSprite(0, 0, 0, 0, 0xff0000);
-                    stage.addChild(tempLine);
-                    lineSprites.pushSingle(tempLine);
+                    for (var i = 0; i < 3; ++i)
+                    {
+                        tempLine = new LineSprite(0, 0, 0, 0, 0xff0000);
+                        stage.addChild(tempLine);
+                        lineSprites.pushSingle(tempLine);
+                    }
                 }
 
                 // Create a polygon sprite for each poly
