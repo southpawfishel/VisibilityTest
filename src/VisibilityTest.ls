@@ -39,9 +39,13 @@ package
         var visibilityLayer:Sprite = null;
         var polyLayer:Sprite = null;
 
+        var pendingClear:Boolean = false;
+        var pendingUpdate:Boolean = false;
+        var touchX:int = 0;
+        var touchY:int = 0;
         var raycastResult:RaycastResult = new RaycastResult();
         var ray:LineSegment = new LineSegment();
-        var angles:Vector.<Number> = [0, 0.0003, -0.0006];
+        var angles:Vector.<Number> = [0, 0.00003, -0.00006];
 
         override public function run():void
         {
@@ -62,31 +66,37 @@ package
         {
             var touch:Touch;
 
-            // Start
-            if (e.getTouch(e.target as DisplayObject, TouchPhase.BEGAN) != null)
+            // Began or Moved
+            if (e.getTouch(e.target as DisplayObject, TouchPhase.BEGAN) != null ||
+                e.getTouch(e.target as DisplayObject, TouchPhase.MOVED) != null)
             {
+                pendingUpdate = true;
                 touch = e.getTouch(e.target as DisplayObject, TouchPhase.BEGAN);
-                castRaysTowardEndpoints(touch.globalX, touch.globalY);
-            }
-            // Move
-            else if (e.getTouch(e.target as DisplayObject, TouchPhase.MOVED) != null)
-            {
-                touch = e.getTouch(e.target as DisplayObject, TouchPhase.MOVED);
-                castRaysTowardEndpoints(touch.globalX, touch.globalY);
+                if (!touch)
+                {
+                    touch = e.getTouch(e.target as DisplayObject, TouchPhase.MOVED);
+                }
+                touchX = touch.globalX;
+                touchY = touch.globalY;
             }
             // Release
             else if (e.getTouch(e.target as DisplayObject, TouchPhase.ENDED) != null)
             {
-                //lineSprite.setPoints(0, 0, 0, 0);
-                for each (var line in lineSprites)
-                {
-                    line.setPoints(0, 0, 0, 0);
-                }
+                pendingClear = true;
+            }
+        }
 
-                for each (var triangle in visibilitySprites)
-                {
-                    triangle.setPoints(0, 0, 0, 0, 0, 0);
-                }
+        protected function clearLinesAndPolys()
+        {
+            //lineSprite.setPoints(0, 0, 0, 0);
+            for each (var line in lineSprites)
+            {
+                line.setPoints(0, 0, 0, 0);
+            }
+
+            for each (var triangle in visibilitySprites)
+            {
+                triangle.setPoints(0, 0, 0, 0, 0, 0);
             }
         }
 
@@ -137,8 +147,22 @@ package
             }
 
             sortIntersectionSegments();
-            renderRaysToIntersections();
-            renderVisibilityPolygons();
+        }
+
+        override public function onFrame():void
+        {
+            if (pendingUpdate)
+            {
+                pendingUpdate = false;
+                castRaysTowardEndpoints(touchX, touchY);
+                renderRaysToIntersections();
+                renderVisibilityPolygons();
+            }
+            else if (pendingClear)
+            {
+                pendingClear = false;
+                clearLinesAndPolys();
+            }
         }
 
         protected function renderRaysToIntersections()
