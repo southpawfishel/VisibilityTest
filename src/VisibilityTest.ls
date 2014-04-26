@@ -9,26 +9,39 @@ package
     import loom2d.events.TouchEvent;
     import loom2d.events.TouchPhase;
     import loom2d.display.DisplayObject;
+    import loom2d.display.QuadBatch;
+    import loom2d.display.Quad;
+    import loom2d.display.Sprite;
     import loom2d.math.Point;
-    import Math2D.Math2D;
-    import Math2D.Polygon;
-    import Math2D.LineSegment;
-    import Math2D.RaycastResult;
+    import math2d.Math2D;
+    import math2d.Polygon;
+    import math2d.LineSegment;
+    import math2d.RaycastResult;
     import DebugDraw.LineSprite;
-    import DebugDraw.PolygonSprite;
+    import DebugDraw.TriangleSprite;
+    import DebugDraw.DebugDraw;
 
     // Simple application inspired by http://ncase.github.io/sight-and-light/
     // to experiment with some 2D math and also to use as a testing ground for
     // some simple debug drawing classes for getting some shapes onscreen easily.
-    public class DebugDrawTest extends Application
+    public class VisibilityTest extends Application
     {
         var worldPolygons:Vector.<Polygon> = null;
         var worldSegments:Vector.<LineSegment> = null;
         var worldEndpoints:Vector.<Point> = null;
+        var intersectionSegments:Vector.<LineSegment> = null;
 
-        var polySprites:Vector.<PolygonSprite> = null;
         var lineSprite:LineSprite = null;
         var lineSprites:Vector.<LineSprite> = null;
+        var polySprites:Vector.<QuadBatch> = null;
+        var visibilitySprites:Vector.<TriangleSprite> = null;
+        var lineLayer:Sprite = null;
+        var visibilityLayer:Sprite = null;
+        var polyLayer:Sprite = null;
+
+        var raycastResult:RaycastResult = new RaycastResult();
+        var ray:LineSegment = new LineSegment();
+        var angles:Vector.<Number> = [0, 0.0003, -0.0006];
 
         override public function run():void
         {
@@ -42,6 +55,7 @@ package
             createWorldPolys();
 
             stage.addEventListener(TouchEvent.TOUCH, onTouch);
+            // stage.reportFps = true;
         }
 
         protected function onTouch(e:TouchEvent)
@@ -68,16 +82,22 @@ package
                 {
                     line.setPoints(0, 0, 0, 0);
                 }
+
+                for each (var triangle in visibilitySprites)
+                {
+                    triangle.setPoints(0, 0, 0, 0, 0, 0);
+                }
             }
         }
 
         protected function castRayToPosition(x:int, y:int)
         {
-            var ray:LineSegment = new LineSegment(stage.stageWidth/2, stage.stageHeight/2, x, y);
-            var result:RaycastResult = Math2D.raycastToSegments(ray, worldSegments);
-            if (result.hit)
+            ray.setP1(stage.stageWidth/2, stage.stageHeight/2);
+            ray.setP2(x, y);
+            Math2D.raycastToSegments(ray, raycastResult, worldSegments);
+            if (raycastResult.hit)
             {
-                lineSprite.setPoints(ray.x1, ray.y1, result.intersection.x, result.intersection.y);
+                lineSprite.setPoints(ray.x1, ray.y1, raycastResult.hitX, raycastResult.hitY);
             }
             else
             {
@@ -87,11 +107,8 @@ package
 
         protected function castRaysTowardEndpoints(x:int, y:int)
         {
-            var ray:LineSegment = new LineSegment(x, y, 0, 0);
-            var result:RaycastResult = new RaycastResult();
             var i = 0;
-            var tempLine:LineSprite = null;
-            var angles:Vector.<Number> = [0, 0.00001, -0.00002];
+            ray.setP1(x, y);
 
             for each (var endpoint in worldEndpoints)
             {
@@ -103,19 +120,62 @@ package
                 // To rotate -0.00001, we'll use -0.00002 to undo the previous rotation.
                 for each (var angle:Number in angles)
                 {
-                    tempLine = lineSprites[i];
                     ray.rotateBy(angle);
-                    result = Math2D.raycastToSegments(ray, worldSegments);
-                    if (result.hit)
+                    Math2D.raycastToSegments(ray, raycastResult, worldSegments);
+                    if (raycastResult.hit)
                     {
-                        tempLine.setPoints(ray.x1, ray.y1, result.intersection.x, result.intersection.y);
+                        intersectionSegments[i].setP1(x, y);
+                        intersectionSegments[i].setP2(raycastResult.hitX, raycastResult.hitY);
                     }
                     else
                     {
-                        tempLine.setPoints(0, 0, 0, 0);
+                        intersectionSegments[i].setP1(0, 0);
+                        intersectionSegments[i].setP2(0, 0);
                     }
                     ++i;
                 }
+            }
+
+            sortIntersectionSegments();
+            renderRaysToIntersections();
+            renderVisibilityPolygons();
+        }
+
+        protected function renderRaysToIntersections()
+        {
+            var i = 0;
+            for each (var hitSeg in intersectionSegments)
+            {
+                lineSprites[i].setPoints(hitSeg.x1, hitSeg.y1, hitSeg.x2, hitSeg.y2);
+                ++i;
+            }
+        }
+
+        protected function sortIntersectionSegments()
+        {
+            intersectionSegments.sort(function(a:LineSegment, b:LineSegment):Number
+            {
+                if (a.angle < b.angle)
+                {
+                    return -1;
+                }
+                else if (a.angle > b.angle)
+                {
+                    return 1;
+                }
+                return 0;
+            });
+        }
+
+        protected function renderVisibilityPolygons()
+        {
+            var next:int = 0;
+            for (var i = 0; i < intersectionSegments.length; ++i)
+            {
+                next = (i + 1) % intersectionSegments.length;
+                visibilitySprites[i].setPoints(intersectionSegments[i].x1, intersectionSegments[i].y1,
+                                               intersectionSegments[i].x2, intersectionSegments[i].y2,
+                                               intersectionSegments[next].x2, intersectionSegments[next].y2);
             }
         }
 
@@ -125,8 +185,17 @@ package
             worldPolygons = new Vector.<Polygon>();
             worldSegments = new Vector.<LineSegment>();
             worldEndpoints = new Vector.<Point>();
-            polySprites = new Vector.<PolygonSprite>();
+            polySprites = new Vector.<QuadBatch>();
             lineSprites = new Vector.<LineSprite>();
+            visibilitySprites = new Vector.<TriangleSprite>();
+            intersectionSegments = new Vector.<LineSegment>();
+
+            visibilityLayer = new Sprite();
+            stage.addChild(visibilityLayer);
+            lineLayer = new Sprite();
+            stage.addChild(lineLayer);
+            polyLayer = new Sprite();
+            stage.addChild(polyLayer);
 
             // Create the actual polygons
             var tempPolygon:Polygon;
@@ -165,8 +234,9 @@ package
             worldPolygons.pushSingle(tempPolygon);
 
             // Generate endpoint, segment, and sprite lists
-            var tempSprite:PolygonSprite = null;
+            var tempSprite:QuadBatch = null;
             var tempLine:LineSprite = null;
+            var tempTriangle:TriangleSprite = null;
             for each (var poly in worldPolygons)
             {
                 // Add segments from poly to global list
@@ -182,16 +252,23 @@ package
                     worldEndpoints.pushSingle(endpoint);
                     for (var i = 0; i < 3; ++i)
                     {
+                        // Create some temporary intersection points
+                        intersectionSegments.pushSingle(new LineSegment());
+
                         tempLine = new LineSprite(0, 0, 0, 0, 0xff0000);
-                        stage.addChild(tempLine);
+                        lineLayer.addChild(tempLine);
                         lineSprites.pushSingle(tempLine);
+
+                        tempTriangle = new TriangleSprite(0, 0, 0, 0, 0, 0, 0x550000);
+                        visibilityLayer.addChild(tempTriangle);
+                        visibilitySprites.pushSingle(tempTriangle);
                     }
                 }
 
                 // Create a polygon sprite for each poly
-                tempSprite = new PolygonSprite(poly.segments, 0x000000);
+                tempSprite = DebugDraw.newPolygonOutline(poly.endpoints, 0x000000);
                 polySprites.pushSingle(tempSprite);
-                stage.addChild(tempSprite);
+                polyLayer.addChild(tempSprite);
             }
         }
     }
